@@ -1,7 +1,6 @@
 import audiorecorder
 import keyboard
 
-
 audioRecorder = audiorecorder.AudioRecorder()
 audioRecorder.startRecording()
 
