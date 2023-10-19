@@ -1,3 +1,4 @@
-## Master's Thesis Project in Computer Engineering: Electric Guitar Effects Using Signal Processing in Python
+## Master's Thesis Project in Computer Engineering
+#### Digital Guitar Effects Using Signal Processing with Python in Real Time
 
-### Benjamin Åberg 2023-2024
+Benjamin Åberg 2023-2024
