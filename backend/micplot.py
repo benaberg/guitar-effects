@@ -7,13 +7,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sounddevice as sd
 
-
 def int_or_str(text):
-    """Helper function for argument parsing."""
-    try:
-        return int(text)
-    except ValueError:
-        return text
+        """Helper function for argument parsing."""
+        try:
+            return int(text)
+        except ValueError:
+            return text
 
 
 parser = argparse.ArgumentParser(add_help=False)
@@ -81,9 +80,10 @@ def update_plot(frame):
     for column, line in enumerate(lines):
         line.set_ydata(plotdata[:, column])
     return lines
-
+    
 
 try:
+    print(sd.query_devices())
     if args.samplerate is None:
         device_info = sd.query_devices(args.device, 'input')
         args.samplerate = device_info['default_samplerate']
@@ -95,17 +95,17 @@ try:
     lines = ax.plot(plotdata)
     if len(args.channels) > 1:
         ax.legend([f'channel {c}' for c in args.channels],
-                  loc='lower left', ncol=len(args.channels))
+                loc='lower left', ncol=len(args.channels))
     ax.axis((0, len(plotdata), -1, 1))
     ax.set_yticks([0])
     ax.yaxis.grid(True)
     ax.tick_params(bottom=False, top=False, labelbottom=False,
-                   right=False, left=False, labelleft=False)
+                right=False, left=False, labelleft=False)
     fig.tight_layout(pad=0)
 
     stream = sd.InputStream(
-        device=22, channels=max(args.channels),
-        samplerate=48000, callback=audio_callback)
+        device=1, channels=max(args.channels),
+        samplerate=44100, callback=audio_callback)
     ani = FuncAnimation(fig, update_plot, interval=args.interval, blit=True)
     with stream:
         plt.show()

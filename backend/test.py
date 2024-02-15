@@ -1,10 +1,4 @@
-import audiorecorder
-import keyboard
+import stream
 
-audioRecorder = audiorecorder.AudioRecorder()
-audioRecorder.startRecording()
-
-while True:
-    if keyboard.is_pressed("q"):
-        audioRecorder.stopRecording()
-        break
+audioStream = stream.AudioStream()
+audioStream.stream()
