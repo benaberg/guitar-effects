@@ -12,40 +12,31 @@ class AudioStream(object):
         self.latency = latency
         self.input_device = input_device
         self.output_device = output_device
+        self.circular_buffer = numpy.zeros((rate, channels))
+        self.buffer_index = 0
         print(sd.query_devices())
 
-    def echo(seldf, indata, rate=192000, chunk=1024, delay=0.5, decay=0.5):
-        
-        indata = indata[:, 0]
-        
-        # Calculate delay in samples
-        delay_samples = int(delay * 192000)
+    def echo(self, input_signal, delay, decay):
+        delay_samples =int(delay * self.rate)
+        num_samples = len(input_signal)
+        output_signal = numpy.zeros_like(input_signal)
 
-        # Initialize output array with zeros
-        outdata = numpy.zeros_like(indata)
+        for i in range(num_samples):
+            delayed_index = (self.buffer_index - delay_samples) % self.rate
+            output_signal[i] = input_signal[i] + self.circular_buffer[delayed_index] * decay
+            self.circular_buffer[self.buffer_index] = input_signal[i]
+            self.buffer_index = (self.buffer_index + 1) % self.rate
 
-        # Iterate over the input signal in chunks of buffer_size
-        for i in range(0, len(indata), chunk):
-            # Extract a chunk of the input signal
-            chunk = indata[i:i + chunk]
-
-            # Create a delayed version of the chunk
-            delayed_chunk = numpy.concatenate([numpy.zeros(delay_samples), chunk])
-
-            # Apply decay to the delayed chunk
-            decayed_chunk = delayed_chunk * decay
-
-            # Add the decayed chunk to the output signal
-            outdata[i:i + len(chunk)] += decayed_chunk
-
-        return outdata
+        return output_signal
 
     def callback(self, indata, outdata, frames, time, status):
         if status:
             print(status)
         
+        # Echo
+        # outdata[:] = self.echo(indata, 0.5, 0.4)
+
         outdata[:] = indata
-        #outdata[:] = self.echo(indata)
 
     def stream(self):
         try :
