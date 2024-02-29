@@ -5,7 +5,7 @@ import numpy
 assert numpy
 
 class AudioStream(object):
-    def __init__(self, rate, block, block_max, channels, latency, input_device, output_device):
+    def __init__(self, rate, block, block_max, channels, latency, input_device, output_device, record):
         self.parser = argparse.ArgumentParser(add_help=False)
         self.rate = rate
         self.block = block
@@ -16,9 +16,15 @@ class AudioStream(object):
         self.c_buffer_max = rate * block_max
         self.c_buffer = numpy.zeros((self.c_buffer_max, channels))
         self.buffer_index = 0
+        self.record = record
         self.recorder = recorder.AudioRecorder(self.rate)
         self.recording = []
         print(sd.query_devices())
+
+    def overdrive(self, input_signal, gain, threshold):
+        output_signal = numpy.tanh(input_signal * gain) * threshold
+
+        return output_signal
 
     def echo(self, input_signal, delay, decay):
         delay_samples = int(delay * self.rate)
@@ -41,15 +47,22 @@ class AudioStream(object):
             print(status)
 
 
+        # Overdrive
+        gain = 10
+        threshold = 0.5
+        outdata[:] = self.overdrive(indata, gain, threshold)
+
+
         # Echo
         delay = 0.5
         decay = 0.5
-        outdata[:] = self.echo(indata, delay, decay)
+        outdata[:] = self.echo(outdata, delay, decay)
 
 
         # Append audio to recorder
-        for sample in outdata[:,0]:
-            self.recording.append(sample)
+        if (self.record):
+            for sample in outdata[:,0]:
+                self.recording.append(sample)
 
 
         #outdata[:] = indata
@@ -68,4 +81,5 @@ class AudioStream(object):
         except KeyboardInterrupt:
             self.parser.exit('')
         finally:
-            self.recorder.write("recording.wav", self.recording)
+            if (self.record):
+                self.recorder.write("recordings/recording.wav", self.recording)
