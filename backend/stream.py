@@ -1,13 +1,14 @@
 import sounddevice as sd
-from scipy import signal as sg
 import librosa
+import time as t
 import recorder
 import argparse
 import numpy
+from cython_files import c_echo, c_overdrive, c_pitch_shift
 assert numpy
 
 class AudioStream(object):
-    def __init__(self, rate, block, block_max, channels, latency, input_device, output_device, record):
+    def __init__(self, rate, block, delay, channels, latency, input_device, output_device, record):
         self.parser = argparse.ArgumentParser(add_help=False)
         self.rate = rate
         self.block = block
@@ -15,13 +16,15 @@ class AudioStream(object):
         self.latency = latency
         self.input_device = input_device
         self.output_device = output_device
-        self.c_buffer_max = block * block_max
-        self.c_buffer = numpy.zeros((self.c_buffer_max, channels))
-        self.buffer_index = 0
+        self.c_buffer_max = (int) (rate * delay)
+        self.c_buffer = numpy.zeros((self.c_buffer_max, channels), dtype=numpy.float32)
+        self.c_buffer_index = 0
         self.record = record
         self.recorder = recorder.AudioRecorder(self.rate)
         self.recording_left = [] # Store left channel audio
         self.recording_right = []  # Store right channel audio
+        self.iter = 0
+        self.mean = 0
         print(sd.query_devices())
 
     def overdrive(self, input_signal, gain, threshold):
@@ -33,11 +36,14 @@ class AudioStream(object):
         delay_samples = int(delay * self.rate)
         num_samples = len(input_signal)
         output_signal = numpy.zeros_like(input_signal)
-        for i in range(num_samples):
-            delayed_index = (self.buffer_index - delay_samples) % self.c_buffer_max
+        i = 0
+
+        while i < num_samples:
+            delayed_index = (self.c_buffer_index - delay_samples) % self.c_buffer_max
             output_signal[i] = input_signal[i] + self.c_buffer[delayed_index]
-            self.c_buffer[self.buffer_index] = input_signal[i] + decay * self.c_buffer[self.buffer_index]
-            self.buffer_index = (self.buffer_index + 1) % self.c_buffer_max
+            self.c_buffer[self.c_buffer_index] = input_signal[i] + decay * self.c_buffer[self.c_buffer_index]
+            self.c_buffer_index = (self.c_buffer_index + 1) % self.c_buffer_max
+            i += 1
         
         return output_signal
 
@@ -45,6 +51,8 @@ class AudioStream(object):
         target_sampling_rate = self.rate * shift
         stretched_signal = self.time_stretch(input_signal, shift)
         resampled_signal = librosa.resample(stretched_signal, orig_sr=self.rate, target_sr=target_sampling_rate * 2)
+
+        ### START FILTER
 
         # Create two signals phase-shifted by 180 degrees
         signal1 = resampled_signal[::2]
@@ -56,11 +64,14 @@ class AudioStream(object):
         fade = numpy.concatenate((fade_in, fade_out))
         
         signal1 *= fade
-        signal2 *= fade  # Reverse fade for second signal
+        signal2 *= fade[::-1]  # Reverse fade for second signal
 
         output_signal = signal1 + signal2
+        
 
         return output_signal
+
+        ### END FILTER
 
     def time_stretch(self, input_signal, stretch_factor):
         output_signal = librosa.effects.time_stretch(input_signal, rate=stretch_factor)
@@ -74,27 +85,44 @@ class AudioStream(object):
         if status:
             print(status)
 
+        gain = 120
+        threshold = 0.03
+        delay = 0.08
+        decay = 0.4
+    
 
-        # Overdrive
-        gain = 20
-        threshold = 0.5
+        ### Overdrive
+
+        # Python
+
         #outdata[:] = self.overdrive(indata, gain, threshold)
         #outdata[:,1] = outdata[:,0]
 
+        # Cython
+        #outdata[:] = c_overdrive.overdrive(indata, gain, threshold)
+        #outdata[:,1] = outdata[:,0]
 
-        # Echo
-        delay = 0.5
-        decay = 0.5
-        outdata[:] = self.echo(indata, delay, decay)
-        outdata[:,1] = outdata[:,0]
 
-        # Pitch shift
+        ### Echo
+
+        # Python
+        #outdata[:] = self.echo(outdata, delay, decay)
+        #outdata[:,1] = outdata[:,0]
+
+        # Cython
+        #outdata[:] = c_echo.echo(indata, delay, decay, self.rate, self.c_buffer, self.c_buffer_index, self.c_buffer_max, self.iter)
+        #outdata[:,1] = outdata[:,0]
+
+
+        ### Pitch shift
+
+        # Python
         #outdata[:] = indata
         #outdata[:,1] = self.pitch_shift(indata[:,0], 0.5)  # 0.5 for one ocatave up
-        
 
-        #outdata[:,0] = indata[:,0]
-
+        # Cython
+        #outdata[:] = indata
+        #outdata[:,1] = c_pitch_shift.pitch_shift(indata[:,0], 0.5, self.rate)
 
         # Append audio to recorder
         if (self.record):
